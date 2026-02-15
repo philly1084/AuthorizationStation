@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authorization-station
+  labels:
+    app: authorization-station
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authorization-station
+  template:
+    metadata:
+      labels:
+        app: authorization-station
+    spec:
+      serviceAccountName: authorization-station
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+      containers:
+        - name: authorization-station
+          image: ghcr.io/philly1084/authorization-station:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            failureThreshold: 20
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          env:
+            - name: AUTH_STATION_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: api_key
+            - name: AUTH_STATION_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: encryption_key
+            - name: AUTH_STATION_DATABASE_URL
+              value: sqlite:///./data/registry.db
+            - name: AUTH_STATION_LITELLM_BASE_URL
+              value: http://litellm-proxy:4000
+            - name: AUTH_STATION_LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: litellm_api_key
+                  optional: true
+            - name: AUTH_STATION_N8N_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: n8n_webhook_secret
+                  optional: true
+          volumeMounts:
+            - name: station-data
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: station-data
+          persistentVolumeClaim:
+            claimName: authorization-station-pvc
+        - name: tmp
+          emptyDir: {}

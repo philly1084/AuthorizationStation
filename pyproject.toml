@@ -1,0 +1,31 @@
+[project]
+name = "authorization-station"
+version = "0.1.0"
+description = "OAuth registry and model router for n8n on Kubernetes"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.116.0",
+  "uvicorn[standard]>=0.35.0",
+  "sqlalchemy>=2.0.43",
+  "pydantic>=2.11.7",
+  "pydantic-settings>=2.10.1",
+  "cryptography>=45.0.6",
+  "typer>=0.16.0",
+  "httpx>=0.28.1",
+]
+
+[project.scripts]
+auth-station = "cli.main:app"
+
+[tool.uv]
+dev-dependencies = [
+  "pytest>=8.3.0",
+  "ruff>=0.6.9",
+]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["app", "cli"]
