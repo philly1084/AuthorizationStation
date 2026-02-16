@@ -19,9 +19,7 @@ class Settings(BaseSettings):
     gemini_cli_redirect_uri: str = "http://localhost:3333/callback"
     gemini_cli_scopes: str = (
         "openid email profile "
-        "https://www.googleapis.com/auth/cloud-platform "
-        "https://www.googleapis.com/auth/generative-language.retriever "
-        "https://www.googleapis.com/auth/generative-language.tuning"
+        "https://www.googleapis.com/auth/cloud-platform"
     )
     # Antigravity / Cloud Code built-in OAuth
     antigravity_client_id: str = ""

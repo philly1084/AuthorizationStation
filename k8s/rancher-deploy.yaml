@@ -1,7 +1,47 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: authorization-station
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: authorization-station-secrets
+  namespace: authorization-station
+type: Opaque
+stringData:
+  # Replace before applying
+  api_key: change-me
+  encryption_key: replace-with-strong-passphrase
+  # Optional values
+  litellm_api_key: ""
+  n8n_webhook_secret: ""
+  google_oauth_client_id: ""
+  google_oauth_client_secret: ""
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: authorization-station
+  namespace: authorization-station
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: authorization-station-pvc
+  namespace: authorization-station
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: authorization-station
+  namespace: authorization-station
   labels:
     app: authorization-station
 spec:
@@ -83,6 +123,18 @@ spec:
                   name: authorization-station-secrets
                   key: n8n_webhook_secret
                   optional: true
+            - name: AUTH_STATION_GOOGLE_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: google_oauth_client_id
+                  optional: true
+            - name: AUTH_STATION_GOOGLE_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: google_oauth_client_secret
+                  optional: true
             - name: AUTH_STATION_GEMINI_CLI_CLIENT_ID
               valueFrom:
                 secretKeyRef:
@@ -118,3 +170,56 @@ spec:
             claimName: authorization-station-pvc
         - name: tmp
           emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authorization-station
+  namespace: authorization-station
+  labels:
+    app: authorization-station
+spec:
+  selector:
+    app: authorization-station
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: authorization-station-ingress
+  namespace: authorization-station
+spec:
+  podSelector:
+    matchLabels:
+      app: authorization-station
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: authorization-station
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: n8n
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
