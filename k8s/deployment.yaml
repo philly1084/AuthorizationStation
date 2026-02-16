@@ -17,6 +17,8 @@ spec:
       serviceAccountName: authorization-station
       securityContext:
         runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
         fsGroup: 10001
       containers:
         - name: authorization-station
@@ -80,6 +82,30 @@ spec:
                 secretKeyRef:
                   name: authorization-station-secrets
                   key: n8n_webhook_secret
+                  optional: true
+            - name: AUTH_STATION_GEMINI_CLI_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: gemini_cli_client_id
+                  optional: true
+            - name: AUTH_STATION_GEMINI_CLI_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: gemini_cli_client_secret
+                  optional: true
+            - name: AUTH_STATION_ANTIGRAVITY_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: antigravity_client_id
+                  optional: true
+            - name: AUTH_STATION_CODEX_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: codex_client_id
                   optional: true
           volumeMounts:
             - name: station-data

@@ -795,7 +795,7 @@ def openai_chat_completions(payload: dict, db: Session = Depends(get_db)) -> dic
     )
     decision = _route(db, route_request)
 
-    if decision.provider not in {"openai", "google", "gemini", "litellm"}:
+    if decision.provider not in {"openai", "google", "gemini", "antigravity", "litellm"}:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
             detail=f"Provider '{decision.provider}' OpenAI-compatible proxy not implemented yet",
@@ -826,7 +826,7 @@ def openai_chat_completions(payload: dict, db: Session = Depends(get_db)) -> dic
     }
     if decision.provider == "openai":
         upstream_url = OPENAI_CHAT_COMPLETIONS_URL
-    elif decision.provider in {"google", "gemini"}:
+    elif decision.provider in {"google", "gemini", "antigravity"}:
         upstream_url = GEMINI_CHAT_COMPLETIONS_URL
     else:
         base_url = (settings.litellm_base_url or "").rstrip("/")
