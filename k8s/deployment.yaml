@@ -107,6 +107,24 @@ spec:
                   name: authorization-station-secrets
                   key: codex_client_id
                   optional: true
+            - name: AUTH_STATION_GOOGLE_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: google_oauth_client_id
+                  optional: true
+            - name: AUTH_STATION_GOOGLE_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: google_oauth_client_secret
+                  optional: true
+            - name: AUTH_STATION_GOOGLE_OAUTH_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: authorization-station-secrets
+                  key: google_oauth_redirect_uri
+                  optional: true
           volumeMounts:
             - name: station-data
               mountPath: /app/data
