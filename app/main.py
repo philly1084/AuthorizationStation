@@ -2,6 +2,7 @@ import logging
 import shlex
 import threading
 from datetime import timedelta
+from uuid import uuid4
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
@@ -49,6 +50,51 @@ DEFAULT_MODELS = {
 SUPPORTED_PROVIDERS = ["openai", "google", "gemini", "litellm", "antigravity"]
 OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 GEMINI_CHAT_COMPLETIONS_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+GEMINI_CLOUDCODE_URL = "https://cloudcode-pa.googleapis.com/v1internal:generateContent"
+
+
+def _openai_to_gemini_contents(messages: list[dict]) -> list[dict]:
+    """Translate OpenAI messages to Gemini generateContent 'contents' format."""
+    contents = []
+    system_parts = []
+    for msg in messages:
+        role = msg.get("role", "user")
+        text = msg.get("content", "")
+        if role == "system":
+            system_parts.append({"text": text})
+            continue
+        gemini_role = "model" if role == "assistant" else "user"
+        contents.append({"role": gemini_role, "parts": [{"text": text}]})
+    return contents, system_parts
+
+
+def _gemini_response_to_openai(gemini_body: dict, model: str) -> dict:
+    """Translate Gemini generateContent response to OpenAI chat completions format."""
+    candidates = gemini_body.get("candidates", [])
+    text = ""
+    if candidates:
+        parts = candidates[0].get("content", {}).get("parts", [])
+        text = "".join(p.get("text", "") for p in parts)
+
+    usage_meta = gemini_body.get("usageMetadata", {})
+    return {
+        "id": f"chatcmpl-{uuid4().hex[:24]}",
+        "object": "chat.completion",
+        "created": 0,
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {
+            "prompt_tokens": usage_meta.get("promptTokenCount", 0),
+            "completion_tokens": usage_meta.get("candidatesTokenCount", 0),
+            "total_tokens": usage_meta.get("totalTokenCount", 0),
+        },
+    }
 
 
 @app.middleware("http")
@@ -824,10 +870,16 @@ def openai_chat_completions(payload: dict, db: Session = Depends(get_db)) -> dic
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
     }
+    use_cloudcode = decision.provider in {"gemini", "antigravity"}
+
     if decision.provider == "openai":
         upstream_url = OPENAI_CHAT_COMPLETIONS_URL
-    elif decision.provider in {"google", "gemini", "antigravity"}:
+    elif use_cloudcode:
+        upstream_url = GEMINI_CLOUDCODE_URL
+    elif decision.provider == "google":
         upstream_url = GEMINI_CHAT_COMPLETIONS_URL
+        if settings.google_project_id:
+            headers["x-goog-user-project"] = settings.google_project_id
     else:
         base_url = (settings.litellm_base_url or "").rstrip("/")
         if not base_url:
@@ -839,16 +891,36 @@ def openai_chat_completions(payload: dict, db: Session = Depends(get_db)) -> dic
         litellm_key = settings.litellm_api_key or access_token
         headers["Authorization"] = f"Bearer {litellm_key}"
 
+    if use_cloudcode:
+        contents, system_parts = _openai_to_gemini_contents(upstream_payload.get("messages", []))
+        gemini_payload = {
+            "model": f"models/{upstream_payload['model']}",
+            "contents": contents,
+            "generationConfig": {},
+        }
+        if system_parts:
+            gemini_payload["systemInstruction"] = {"parts": system_parts}
+        if upstream_payload.get("temperature") is not None:
+            gemini_payload["generationConfig"]["temperature"] = upstream_payload["temperature"]
+        if upstream_payload.get("max_tokens"):
+            gemini_payload["generationConfig"]["maxOutputTokens"] = upstream_payload["max_tokens"]
+        request_json = gemini_payload
+    else:
+        request_json = upstream_payload
+
     try:
         with httpx.Client(timeout=90) as client:
-            response = client.post(upstream_url, json=upstream_payload, headers=headers)
+            response = client.post(upstream_url, json=request_json, headers=headers)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Upstream {decision.provider} request failed: {exc}") from exc
 
     if response.status_code >= 400:
         raise HTTPException(status_code=response.status_code, detail=response.text)
 
-    data = response.json()
+    if use_cloudcode:
+        data = _gemini_response_to_openai(response.json(), upstream_payload["model"])
+    else:
+        data = response.json()
     usage_payload = UsageEventIngest(
         provider=decision.provider,
         model=data.get("model", decision.selected_model),

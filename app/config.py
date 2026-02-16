@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     codex_client_id: str = ""
     codex_redirect_uri: str = "http://localhost:1455/auth/callback"
     codex_scopes: str = "openid profile email offline_access"
+    # Google Cloud project ID (required for Gemini API with OAuth tokens)
+    google_project_id: str | None = None
     litellm_base_url: str | None = None
     litellm_api_key: str | None = None
     refresh_check_interval_seconds: int = 60
