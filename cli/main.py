@@ -478,8 +478,9 @@ def auth_login(
         },
     )
     session_id = started["id"]
+    effective_mode = (started.get("flow") or mode).strip().lower()
 
-    if mode == "browser":
+    if effective_mode == "browser":
         typer.echo("\nSTEP 1: Paste this URL in a browser and sign in:")
         typer.echo(started.get("verification_uri") or "<missing verification_uri>")
         typer.echo("\nSTEP 2: After login, copy the FULL redirected URL and paste it below.")
