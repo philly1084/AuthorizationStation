@@ -50,7 +50,7 @@ DEFAULT_MODELS = {
 SUPPORTED_PROVIDERS = ["openai", "google", "gemini", "litellm", "antigravity"]
 OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 GEMINI_CHAT_COMPLETIONS_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-GEMINI_CLOUDCODE_URL = "https://cloudcode-pa.googleapis.com/v1internal:generateContent"
+GEMINI_CLOUDCODE_BASE = "https://cloudcode-pa.googleapis.com/v1beta"
 
 
 def _openai_to_gemini_contents(messages: list[dict]) -> list[dict]:
@@ -875,7 +875,7 @@ def openai_chat_completions(payload: dict, db: Session = Depends(get_db)) -> dic
     if decision.provider == "openai":
         upstream_url = OPENAI_CHAT_COMPLETIONS_URL
     elif use_cloudcode:
-        upstream_url = GEMINI_CLOUDCODE_URL
+        upstream_url = f"{GEMINI_CLOUDCODE_BASE}/models/{upstream_payload['model']}:generateContent"
     elif decision.provider == "google":
         upstream_url = GEMINI_CHAT_COMPLETIONS_URL
         if settings.google_project_id:
@@ -894,7 +894,6 @@ def openai_chat_completions(payload: dict, db: Session = Depends(get_db)) -> dic
     if use_cloudcode:
         contents, system_parts = _openai_to_gemini_contents(upstream_payload.get("messages", []))
         gemini_payload = {
-            "model": f"models/{upstream_payload['model']}",
             "contents": contents,
             "generationConfig": {},
         }
