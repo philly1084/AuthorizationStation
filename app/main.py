@@ -830,10 +830,13 @@ def openai_models(profile: str = Query(default="default"), db: Session = Depends
 def openai_chat_completions(payload: dict, db: Session = Depends(get_db)) -> dict:
     profile = payload.get("profile") or settings.default_profile
     provider_hints = payload.get("provider_hints") or []
+    requested_model = payload.get("model")
+    if isinstance(requested_model, str) and requested_model.strip().lower() in {"router-auto", "auto"}:
+        requested_model = None
     route_request = RouteDecisionRequest(
         profile=profile,
         provider_hints=provider_hints,
-        model=payload.get("model"),
+        model=requested_model,
         thinking=payload.get("thinking"),
         verbose=payload.get("verbose"),
         compaction=payload.get("compaction"),
@@ -870,13 +873,13 @@ def openai_chat_completions(payload: dict, db: Session = Depends(get_db)) -> dic
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
     }
-    use_cloudcode = decision.provider in {"gemini", "antigravity"}
+    use_cloudcode = decision.provider == "antigravity"
 
     if decision.provider == "openai":
         upstream_url = OPENAI_CHAT_COMPLETIONS_URL
     elif use_cloudcode:
         upstream_url = GEMINI_CLOUDCODE_URL
-    elif decision.provider == "google":
+    elif decision.provider in {"google", "gemini"}:
         upstream_url = GEMINI_CHAT_COMPLETIONS_URL
         if settings.google_project_id:
             headers["x-goog-user-project"] = settings.google_project_id
