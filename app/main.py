@@ -50,7 +50,7 @@ DEFAULT_MODELS = {
 SUPPORTED_PROVIDERS = ["openai", "google", "gemini", "litellm", "antigravity"]
 OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 GEMINI_CHAT_COMPLETIONS_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-GEMINI_CLOUDCODE_BASE = "https://cloudcode-pa.googleapis.com/v1beta"
+GEMINI_CLOUDCODE_URL = "https://cloudcode-pa.googleapis.com/v1internal:generateContent"
 
 
 def _openai_to_gemini_contents(messages: list[dict]) -> list[dict]:
@@ -875,7 +875,7 @@ def openai_chat_completions(payload: dict, db: Session = Depends(get_db)) -> dic
     if decision.provider == "openai":
         upstream_url = OPENAI_CHAT_COMPLETIONS_URL
     elif use_cloudcode:
-        upstream_url = f"{GEMINI_CLOUDCODE_BASE}/models/{upstream_payload['model']}:generateContent"
+        upstream_url = GEMINI_CLOUDCODE_URL
     elif decision.provider == "google":
         upstream_url = GEMINI_CHAT_COMPLETIONS_URL
         if settings.google_project_id:
@@ -893,17 +893,24 @@ def openai_chat_completions(payload: dict, db: Session = Depends(get_db)) -> dic
 
     if use_cloudcode:
         contents, system_parts = _openai_to_gemini_contents(upstream_payload.get("messages", []))
-        gemini_payload = {
+        inner_request = {
             "contents": contents,
             "generationConfig": {},
         }
         if system_parts:
-            gemini_payload["systemInstruction"] = {"parts": system_parts}
+            inner_request["systemInstruction"] = {"parts": system_parts}
         if upstream_payload.get("temperature") is not None:
-            gemini_payload["generationConfig"]["temperature"] = upstream_payload["temperature"]
+            inner_request["generationConfig"]["temperature"] = upstream_payload["temperature"]
         if upstream_payload.get("max_tokens"):
-            gemini_payload["generationConfig"]["maxOutputTokens"] = upstream_payload["max_tokens"]
-        request_json = gemini_payload
+            inner_request["generationConfig"]["maxOutputTokens"] = upstream_payload["max_tokens"]
+
+        request_json = {
+            "model": upstream_payload["model"],
+            "user_prompt_id": uuid4().hex,
+            "request": inner_request,
+        }
+        if settings.google_project_id:
+            request_json["project"] = settings.google_project_id
     else:
         request_json = upstream_payload
 
